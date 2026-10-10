@@ -1,6 +1,6 @@
 #!/bin/bash
 # rpi2b-oneshot-setup
-
+clear
 set -u
 exec >/dev/null 2>&1
 
@@ -175,30 +175,12 @@ EOF
 fi
 
 if ask "smb share"; then
-    apt install -y samba samba-common-bin smbclient wsdd
+    apt install -y samba samba-common-bin smbclient wsdd2
 
-    for s in winbind samba-ad-dc nmbd; do
+    for s in winbind samba-ad-dc; do
         systemctl list-unit-files 2>/dev/null | grep -q "^${s}\.service" && \
             systemctl disable --now "$s"
     done
-
-    cat > /etc/systemd/system/wsdd.service <<EOF
-[Unit]
-Description=Web Services Dynamic Discovery host daemon
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/wsdd -n RPI2B -w WORKGROUP -s
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    systemctl daemon-reload
-    systemctl enable --now wsdd
 
     [ -d /smbshare ] || mkdir -p /smbshare
     chmod 777 /smbshare
@@ -214,7 +196,7 @@ EOF
    null passwords = yes
    server min protocol = SMB3_11
    server max protocol = SMB3_11
-   server signing = auto
+   server signing = required
    multicast dns register = yes
    local master = yes
    preferred master = yes
@@ -239,6 +221,7 @@ EOF
    force group = root
    create mask = 0644
    directory mask = 0755
+   smb encrypt = required
 EOF
 
     testparm -s >/dev/null 2>&1 || exit 1
@@ -256,8 +239,15 @@ EOF
     systemctl restart "$sm"
     systemctl enable "$sm"
 
-    testparm -sv 2>/dev/null | grep -qiE 'server min protocol = SMB3(_11)?' || exit 1
-    testparm -sv 2>/dev/null | grep -qE 'max connections = 5' || exit 1
+    systemctl enable --now nmbd  2>/dev/null || true
+    systemctl enable --now wsdd2
+
+    testparm -sv 2>/dev/null | grep -qiE 'server min protocol = SMB3(_11)?'  || exit 1
+    testparm -sv 2>/dev/null | grep -qE  'max connections = 5'                || exit 1
+    testparm -sv 2>/dev/null | grep -qE  'server signing = required'          || exit 1
+    testparm -sv 2>/dev/null | grep -qiE 'server smb encrypt = required|smb encrypt = required' || exit 1
+
     smbclient //localhost/smbshare -U root% -c 'ls' >/dev/null 2>&1 || exit 1
-    systemctl is-active wsdd >/dev/null || exit 1
+    systemctl is-active wsdd2 >/dev/null || exit 1
+    systemctl is-active nmbd  >/dev/null || exit 1
 fi
