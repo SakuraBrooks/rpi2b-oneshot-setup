@@ -174,7 +174,8 @@ cat > /etc/samba/smb.conf <<EOF
    null passwords = yes
    server min protocol = SMB3_11
    server max protocol = SMB3_11
-   server signing = required
+   server signing = no
+   smb encrypt = off
    multicast dns register = yes
    local master = yes
    preferred master = yes
@@ -199,7 +200,7 @@ cat > /etc/samba/smb.conf <<EOF
    force group = root
    create mask = 0644
    directory mask = 0755
-   smb encrypt = required
+   smb encrypt = off
 EOF
 
 pdbedit -x -u root 2>/dev/null
